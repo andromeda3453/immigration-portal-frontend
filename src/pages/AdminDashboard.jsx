@@ -6,7 +6,7 @@ function AdminDashboard() {
   const [candidates, setCandidates] = useState([]);
   const [selectedCandidate, setSelectedCandidate] = useState(null);
   const [showModal, setShowModal] = useState(false);
-  const [modalType, setModalType] = useState(''); // 'edit' or 'progress'
+  const [modalType, setModalType] = useState(''); // 'edit', 'progress', or 'new'
   const [editData, setEditData] = useState({});
   const navigate = useNavigate();
 
@@ -27,8 +27,8 @@ function AdminDashboard() {
       const defaultCandidates = [
         {
           id: 1,
+          name: 'John Doe',
           username: 'john_doe',
-          email: 'john@example.com',
           password: 'password123',
           steps: [
             { 
@@ -49,8 +49,8 @@ function AdminDashboard() {
         },
         {
           id: 2,
+          name: 'Jane Smith',
           username: 'jane_smith',
-          email: 'jane@example.com',
           password: 'password456',
           steps: [
             { 
@@ -73,13 +73,13 @@ function AdminDashboard() {
     navigate('/');
   };
 
-  const openModal = (type, candidate) => {
+  const openModal = (type, candidate = null) => {
     setModalType(type);
     setSelectedCandidate(candidate);
     if (type === 'edit') {
       setEditData({
+        name: candidate.name,
         username: candidate.username,
-        email: candidate.email,
         password: candidate.password
       });
     } else if (type === 'progress') {
@@ -107,6 +107,12 @@ function AdminDashboard() {
           }
         });
       }
+    } else if (type === 'new') {
+      setEditData({
+        name: '',
+        username: '',
+        password: ''
+      });
     }
     setShowModal(true);
   };
@@ -144,33 +150,53 @@ function AdminDashboard() {
   };
 
   const saveChanges = () => {
-    const updatedCandidates = candidates.map(candidate => {
-      if (candidate.id === selectedCandidate.id) {
-        if (modalType === 'edit') {
-          return { ...candidate, ...editData };
-        } else if (modalType === 'progress') {
-          // Update progress in localStorage for candidate dashboard
-          const progressData = { steps: editData.steps };
-          localStorage.setItem(`progress_${candidate.username}`, JSON.stringify(progressData));
-          return { ...candidate, steps: editData.steps };
+    if (modalType === 'new') {
+      // Create new candidate
+      const newCandidate = {
+        id: Date.now(), // Simple ID generation
+        name: editData.name,
+        username: editData.username,
+        password: editData.password,
+        steps: []
+      };
+      const updatedCandidates = [...candidates, newCandidate];
+      setCandidates(updatedCandidates);
+      localStorage.setItem('candidates', JSON.stringify(updatedCandidates));
+    } else {
+      const updatedCandidates = candidates.map(candidate => {
+        if (candidate.id === selectedCandidate.id) {
+          if (modalType === 'edit') {
+            return { ...candidate, ...editData };
+          } else if (modalType === 'progress') {
+            // Update progress in localStorage for candidate dashboard
+            const progressData = { steps: editData.steps };
+            localStorage.setItem(`progress_${candidate.username}`, JSON.stringify(progressData));
+            return { ...candidate, steps: editData.steps };
+          }
         }
-      }
-      return candidate;
-    });
-    
-    setCandidates(updatedCandidates);
-    localStorage.setItem('candidates', JSON.stringify(updatedCandidates));
+        return candidate;
+      });
+      
+      setCandidates(updatedCandidates);
+      localStorage.setItem('candidates', JSON.stringify(updatedCandidates));
+    }
     closeModal();
   };
 
-  const getStepStatus = (step) => {
+  const getLatestStep = (candidate) => {
+    if (!candidate.steps || candidate.steps.length === 0) {
+      return { title: 'No updates yet', status: 'Pending' };
+    }
+    return candidate.steps[candidate.steps.length - 1];
+  };
+
+  const getStepStatus = (status) => {
     const statuses = {
-      'Completed': 'bg-green-100 text-green-800',
-      'In Progress': 'bg-yellow-100 text-yellow-800',
-      'Pending': 'bg-gray-100 text-gray-800',
-      'Rejected': 'bg-red-100 text-red-800'
+      'Complete': 'bg-green-100 text-green-800',
+      'In Progress': 'bg-blue-100 text-blue-800',
+      'Pending': 'bg-gray-100 text-gray-800'
     };
-    return statuses[step] || 'bg-gray-100 text-gray-800';
+    return statuses[status] || 'bg-gray-100 text-gray-800';
   };
 
   return (
@@ -195,17 +221,28 @@ function AdminDashboard() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="bg-white overflow-hidden shadow rounded-lg">
           <div className="px-4 py-5 sm:p-6">
-            <h2 className="text-lg font-medium text-gray-900 mb-4">Candidate Management</h2>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-medium text-gray-900">Candidate Management</h2>
+              <button
+                onClick={() => openModal('new')}
+                className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+              >
+                New User
+              </button>
+            </div>
             
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Name
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Username
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Email
+                      Password
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Progress
@@ -216,49 +253,46 @@ function AdminDashboard() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {candidates.map((candidate) => (
-                    <tr key={candidate.id}>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {candidate.username}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {candidate.email}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <div className="flex items-center">
-                          {candidate.steps ? (
-                            <>
-                              <div className="bg-gray-200 rounded-full h-2 w-20 mr-2">
-                                <div 
-                                  className="bg-blue-600 h-2 rounded-full"
-                                  style={{ width: `${(candidate.steps.filter(s => s.status === 'Complete').length / candidate.steps.length) * 100}%` }}
-                                ></div>
-                              </div>
-                              <span className="text-xs">
-                                {candidate.steps.filter(s => s.status === 'Complete').length}/{candidate.steps.length}
-                              </span>
-                            </>
-                          ) : (
-                            <span className="text-xs text-gray-400">No progress data</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <button
-                          onClick={() => openModal('edit', candidate)}
-                          className="text-indigo-600 hover:text-indigo-900 mr-3"
-                        >
-                          Edit Account
-                        </button>
-                        <button
-                          onClick={() => openModal('progress', candidate)}
-                          className="text-green-600 hover:text-green-900"
-                        >
-                          Update Progress
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {candidates.map((candidate) => {
+                    const latestStep = getLatestStep(candidate);
+                    return (
+                      <tr key={candidate.id}>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {candidate.name}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {candidate.username}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {candidate.password}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                          <div>
+                            <div className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStepStatus(latestStep.status)}`}>
+                              {latestStep.title}
+                            </div>
+                            {latestStep.date && (
+                              <div className="text-xs text-gray-500 mt-1">{latestStep.date}</div>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <button
+                            onClick={() => openModal('edit', candidate)}
+                            className="text-indigo-600 hover:text-indigo-900 mr-3"
+                          >
+                            Edit Account
+                          </button>
+                          <button
+                            onClick={() => openModal('progress', candidate)}
+                            className="text-green-600 hover:text-green-900"
+                          >
+                            Update Progress
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -272,11 +306,22 @@ function AdminDashboard() {
           <div className="relative top-10 mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-md bg-white">
             <div className="mt-3">
               <h3 className="text-lg font-medium text-gray-900 mb-4">
-                {modalType === 'edit' ? 'Edit Account' : 'Update Progress'}
+                {modalType === 'edit' ? 'Edit Account' : modalType === 'progress' ? 'Update Progress' : 'Add New User'}
               </h3>
               
-              {modalType === 'edit' ? (
+              {modalType === 'edit' || modalType === 'new' ? (
                 <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Name
+                    </label>
+                    <input
+                      type="text"
+                      value={editData.name || ''}
+                      onChange={(e) => setEditData({ ...editData, name: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                  </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Username
@@ -285,17 +330,6 @@ function AdminDashboard() {
                       type="text"
                       value={editData.username || ''}
                       onChange={(e) => setEditData({ ...editData, username: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Email
-                    </label>
-                    <input
-                      type="email"
-                      value={editData.email || ''}
-                      onChange={(e) => setEditData({ ...editData, email: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                     />
                   </div>
